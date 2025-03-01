@@ -18,49 +18,74 @@
             <label for="head">Initial Head Position:</label>
             <input type="number" id="head" placeholder="E.g., 53">
 
-            <label for="algorithm">Select Algorithm:</label>
-            <select id="algorithm">
-                <option value="fcfs">FCFS</option>
-                <option value="sstf">SSTF</option>
-                <option value="scan">SCAN</option>
-                <option value="cscan">C-SCAN</option>
-                <option value="look">LOOK</option>
-            </select>
+            <label>Select Algorithms to Compare:</label>
+            <div class="checkbox-group">
+                <label><input type="checkbox" value="fcfs"> FCFS</label>
+                <label><input type="checkbox" value="sstf"> SSTF</label>
+                <label><input type="checkbox" value="scan"> SCAN</label>
+                <label><input type="checkbox" value="cscan"> C-SCAN</label>
+                <label><input type="checkbox" value="look"> LOOK</label>
+            </div>
             
-            <button onclick="runScheduler()"><i class="fa fa-play"></i> Visualize</button>
+            <button onclick="runScheduler()"><i class="fa fa-play"></i> Visualize & Compare</button>
         </div>
 
         <div class="result-section">
             <h2>Results</h2>
-            <p id="seekTime">Total Seek Time: -</p>
+            <div id="algorithmResults"></div>
+            <p id="bestAlgorithm">Best Algorithm: -</p>
             <canvas id="chart"></canvas>
         </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
+        let chartInstance = null;
+        
         function runScheduler() {
             const requests = document.getElementById("requests").value.split(',').map(Number);
             const head = parseInt(document.getElementById("head").value);
-            const algorithm = document.getElementById("algorithm").value;
+            const selectedAlgorithms = Array.from(document.querySelectorAll('input[type=checkbox]:checked')).map(cb => cb.value);
+
+            if (selectedAlgorithms.length === 0) {
+                alert("Please select at least one algorithm.");
+                return;
+            }
 
             fetch('http://localhost:5000/schedule', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ requests, head, algorithm })
+                body: JSON.stringify({ requests, head, algorithms: selectedAlgorithms })
             })
             .then(response => response.json())
             .then(data => {
-                document.getElementById("seekTime").innerText = "Total Seek Time: " + data.seekTime;
-                visualize(data.sequence);
+                const resultsDiv = document.getElementById("algorithmResults");
+                resultsDiv.innerHTML = "";
+                
+                let bestAlgo = null;
+                let bestSeekTime = Infinity;
+
+                selectedAlgorithms.forEach(algo => {
+                    resultsDiv.innerHTML += `<p>${algo.toUpperCase()} - Total Seek Time: ${data.seekTimes[algo]}</p>`;
+                    if (data.seekTimes[algo] < bestSeekTime) {
+                        bestSeekTime = data.seekTimes[algo];
+                        bestAlgo = algo;
+                    }
+                });
+
+                document.getElementById("bestAlgorithm").innerText = "Best Algorithm: " + bestAlgo.toUpperCase();
+                visualize(data.bestSequence);
             });
         }
 
         function visualize(sequence) {
             const ctx = document.getElementById('chart').getContext('2d');
-            new Chart(ctx, {
+            if (chartInstance) {
+                chartInstance.destroy();
+            }
+            chartInstance = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: sequence,

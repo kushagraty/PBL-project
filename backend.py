@@ -2,15 +2,16 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS to allow frontend requests
+CORS(app)
 
-# FCFS Algorithm
+# Disk Scheduling Algorithms
+
 def fcfs(requests, head):
     seek_sequence = [head] + requests
     total_seek = sum(abs(seek_sequence[i] - seek_sequence[i + 1]) for i in range(len(seek_sequence) - 1))
     return seek_sequence, total_seek
 
-# SSTF Algorithm
+
 def sstf(requests, head):
     seek_sequence = [head]
     total_seek = 0
@@ -22,29 +23,60 @@ def sstf(requests, head):
         requests.remove(closest)
     return seek_sequence, total_seek
 
-# SCAN Algorithm
+
 def scan(requests, head, disk_size=200):
     left = sorted([r for r in requests if r < head])
     right = sorted([r for r in requests if r >= head])
     seek_sequence = [head] + right + left[::-1]
-    total_seek = abs(head - right[-1]) + abs(left[0] - right[-1]) if left else abs(head - right[-1])
+    total_seek = abs(head - right[-1]) + (abs(left[0] - right[-1]) if left else 0)
     return seek_sequence, total_seek
+
+
+def cscan(requests, head, disk_size=200):
+    left = sorted([r for r in requests if r < head])
+    right = sorted([r for r in requests if r >= head])
+    seek_sequence = [head] + right + [0] + left
+    total_seek = (abs(head - right[-1]) + (disk_size - right[-1]) + left[-1]) if left else abs(head - right[-1])
+    return seek_sequence, total_seek
+
+
+def look(requests, head):
+    left = sorted([r for r in requests if r < head])
+    right = sorted([r for r in requests if r >= head])
+    seek_sequence = [head] + right + left[::-1]
+    total_seek = abs(head - right[-1]) + (abs(left[0] - right[-1]) if left else 0)
+    return seek_sequence, total_seek
+
 
 @app.route('/schedule', methods=['POST'])
 def schedule():
     data = request.json
     requests = list(map(int, data['requests']))
     head = int(data['head'])
-    algorithm = data['algorithm']
+    algorithms = data['algorithms']
 
-    if algorithm == 'fcfs':
-        sequence, seek_time = fcfs(requests, head)
-    elif algorithm == 'sstf':
-        sequence, seek_time = sstf(requests, head)
-    elif algorithm == 'scan':
-        sequence, seek_time = scan(requests, head)
+    results = {}
+    for algo in algorithms:
+        if algo == 'fcfs':
+            sequence, seek_time = fcfs(requests.copy(), head)
+        elif algo == 'sstf':
+            sequence, seek_time = sstf(requests.copy(), head)
+        elif algo == 'scan':
+            sequence, seek_time = scan(requests.copy(), head)
+        elif algo == 'cscan':
+            sequence, seek_time = cscan(requests.copy(), head)
+        elif algo == 'look':
+            sequence, seek_time = look(requests.copy(), head)
+        
+        results[algo] = { 'sequence': sequence, 'seekTime': seek_time }
 
-    return jsonify({'sequence': sequence, 'seekTime': seek_time})
+    best_algo = min(results, key=lambda x: results[x]['seekTime'])
+    
+    return jsonify({
+        'seekTimes': { algo: results[algo]['seekTime'] for algo in results },
+        'bestAlgorithm': best_algo,
+        'bestSequence': results[best_algo]['sequence']
+    })
 
 if __name__ == '__main__':
     app.run(debug=True)

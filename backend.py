@@ -11,7 +11,6 @@ def fcfs(requests, head):
     total_seek = sum(abs(seek_sequence[i] - seek_sequence[i + 1]) for i in range(len(seek_sequence) - 1))
     return seek_sequence, total_seek
 
-
 def sstf(requests, head):
     seek_sequence = [head]
     total_seek = 0
@@ -23,22 +22,19 @@ def sstf(requests, head):
         requests.remove(closest)
     return seek_sequence, total_seek
 
-
-def scan(requests, head, disk_size=200):
+def scan(requests, head, disk_size):
     left = sorted([r for r in requests if r < head])
     right = sorted([r for r in requests if r >= head])
     seek_sequence = [head] + right + left[::-1]
     total_seek = abs(head - right[-1]) + (abs(left[0] - right[-1]) if left else 0)
     return seek_sequence, total_seek
 
-
-def cscan(requests, head, disk_size=200):
+def cscan(requests, head, disk_size):
     left = sorted([r for r in requests if r < head])
     right = sorted([r for r in requests if r >= head])
-    seek_sequence = [head] + right + [0] + left
+    seek_sequence = [head] + right + [disk_size - 1] + left
     total_seek = (abs(head - right[-1]) + (disk_size - right[-1]) + left[-1]) if left else abs(head - right[-1])
     return seek_sequence, total_seek
-
 
 def look(requests, head):
     left = sorted([r for r in requests if r < head])
@@ -47,12 +43,12 @@ def look(requests, head):
     total_seek = abs(head - right[-1]) + (abs(left[0] - right[-1]) if left else 0)
     return seek_sequence, total_seek
 
-
 @app.route('/schedule', methods=['POST'])
 def schedule():
     data = request.json
     requests = list(map(int, data['requests']))
     head = int(data['head'])
+    disk_size = int(data['diskSize'])
     algorithms = data['algorithms']
 
     results = {}
@@ -62,20 +58,22 @@ def schedule():
         elif algo == 'sstf':
             sequence, seek_time = sstf(requests.copy(), head)
         elif algo == 'scan':
-            sequence, seek_time = scan(requests.copy(), head)
+            sequence, seek_time = scan(requests.copy(), head, disk_size)
         elif algo == 'cscan':
-            sequence, seek_time = cscan(requests.copy(), head)
+            sequence, seek_time = cscan(requests.copy(), head, disk_size)
         elif algo == 'look':
             sequence, seek_time = look(requests.copy(), head)
-        
-        results[algo] = { 'sequence': sequence, 'seekTime': seek_time }
+
+        results[algo] = {'sequence': sequence, 'seekTime': seek_time}
 
     best_algo = min(results, key=lambda x: results[x]['seekTime'])
+    disk_utilization = round((sum(results[best_algo]['sequence']) / disk_size) * 100, 2)
     
     return jsonify({
-        'seekTimes': { algo: results[algo]['seekTime'] for algo in results },
+        'seekTimes': {algo: results[algo]['seekTime'] for algo in results},
         'bestAlgorithm': best_algo,
-        'bestSequence': results[best_algo]['sequence']
+        'bestSequence': results[best_algo]['sequence'],
+        'diskUtilization': disk_utilization
     })
 
 if __name__ == '__main__':
